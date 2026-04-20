@@ -13,6 +13,8 @@ Dashboard phân tích dữ liệu kinh doanh từ bộ dữ liệu **Classicmode
 
 - Tìm kiếm khách hàng theo tên (`/api/search`)
 - Thống kê doanh thu từ đơn hàng đã giao (`/api/stats`)
+- Chatbot tư vấn dữ liệu kinh doanh (`/api/chat`)
+- Chatbot dùng **dynamic context**: tự trích từ khóa câu hỏi và nạp dữ liệu liên quan từ DB trước khi gửi cho LLM
 - Biểu đồ doanh thu theo năm (Bar Chart)
 - Pivot table kéo-thả để phân tích dữ liệu đa chiều
 - Cache dữ liệu phía frontend bằng React Query
@@ -49,6 +51,10 @@ Tạo/sửa file `.env`:
 ```env
 DATABASE_URL="mysql://<username>:<password>@localhost:3306/classicmodels"
 PORT=3000
+OPENAI_API_KEY="<your_openai_api_key>"
+OPENAI_MODEL="gpt-4o-mini"
+# Optional:
+# OPENAI_API_URL="https://api.openai.com/v1"
 ```
 
 Sinh Prisma Client:
@@ -85,10 +91,41 @@ Tìm khách hàng theo tên, trả về danh sách khách hàng kèm orders.
 
 Trả về dữ liệu tổng hợp (customer, product, year, month, revenue) phục vụ chart và pivot table.
 
+### `POST /api/chat`
+
+Chatbot tư vấn dựa trên ngữ cảnh dữ liệu dashboard + context động theo câu hỏi.
+
+Luồng xử lý:
+
+1. Nhận `message` + `history` từ frontend.
+2. Trích từ khóa trong câu hỏi (ưu tiên chuỗi trong dấu nháy `'...'` / `"..."`).
+3. Truy vấn DB để lấy `relatedCustomers` (tên, quốc gia, thành phố, credit limit, số đơn).
+4. Ghép với business summary (tổng doanh thu, top năm, top product line) thành JSON context.
+5. Gửi context này vào prompt để LLM trả lời chính xác hơn cho câu hỏi cụ thể.
+
+Body mẫu:
+
+```json
+{
+  "message": "Năm nào doanh thu cao nhất?",
+  "history": [
+    { "role": "user", "content": "..." },
+    { "role": "assistant", "content": "..." }
+  ]
+}
+```
+
+Response mẫu:
+
+```json
+{
+  "answer": "Khách hàng Mini Gifts Distributors Ltd. nằm ở USA."
+}
+```
+
 ## Công nghệ sử dụng
 
 - Express, Prisma ORM, MySQL
 - React, Vite, Tailwind CSS
 - TanStack Query, Axios
 - Recharts, react-pivottable
-
