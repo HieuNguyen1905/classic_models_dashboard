@@ -14,3 +14,8 @@ export const getStatsData = async () => {
     const response = await apiClient.get('/stats');
     return response.data;
 };
+
+export const chatWithAssistant = async ({ message, history }) => {
+    const response = await apiClient.post('/chat', { message, history });
+    return response.data;
+};

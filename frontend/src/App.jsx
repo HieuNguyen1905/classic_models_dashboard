@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useStats, useSearch } from './hooks/useDashboardData';
+import { chatWithAssistant } from './services/api';
 import PivotTableUIImport from 'react-pivottable/PivotTableUI';
 const PivotTableUI = PivotTableUIImport.default || PivotTableUIImport;
 import 'react-pivottable/pivottable.css';
@@ -8,6 +9,17 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [pivotState, setPivotState] = useState({});
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState([
+    {
+      role: 'assistant',
+      content:
+        'Xin chào! Tôi là trợ lý Classicmodels. Bạn có thể hỏi về doanh thu, khách hàng, sản phẩm hoặc xu hướng kinh doanh.',
+    },
+  ]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [chatError, setChatError] = useState('');
 
   const { data: searchResults, isLoading: isSearching } = useSearch(searchTerm);
   const { data: statsData, isLoading: isLoadingStats } = useStats();
@@ -75,6 +87,31 @@ function App() {
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(
       Number(value) || 0,
     );
+
+  const sendChatMessage = async () => {
+    const message = chatInput.trim();
+    if (!message || isChatLoading) return;
+
+    const nextMessages = [...chatMessages, { role: 'user', content: message }];
+    setChatMessages(nextMessages);
+    setChatInput('');
+    setChatError('');
+    setIsChatLoading(true);
+
+    try {
+      const history = nextMessages.slice(-8).map((item) => ({
+        role: item.role,
+        content: item.content,
+      }));
+      const result = await chatWithAssistant({ message, history });
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: result.answer }]);
+    } catch (error) {
+      const serverMessage = error?.response?.data?.error;
+      setChatError(serverMessage || 'Không thể kết nối chatbot. Vui lòng thử lại.');
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-8 font-sans sm:px-6 lg:px-10">
@@ -192,6 +229,74 @@ function App() {
           </div>
         </section>
       </main>
+
+      <div className="fixed bottom-6 right-6 z-40">
+        {isChatOpen ? (
+          <div className="flex h-[540px] w-[360px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-900 px-4 py-3 text-white">
+              <div>
+                <p className="text-sm font-semibold">Classicmodels Assistant</p>
+                <p className="text-xs text-slate-300">Hỏi đáp dữ liệu kinh doanh</p>
+              </div>
+              <button
+                className="rounded-md px-2 py-1 text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                onClick={() => setIsChatOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-3">
+              {chatMessages.map((item, index) => (
+                <div
+                  key={`${item.role}-${index}`}
+                  className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
+                    item.role === 'user'
+                      ? 'ml-auto bg-blue-600 text-white'
+                      : 'border border-slate-200 bg-white text-slate-700'
+                  }`}
+                >
+                  {item.content}
+                </div>
+              ))}
+              {isChatLoading && (
+                <div className="max-w-[85%] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">
+                  Đang suy nghĩ...
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-slate-200 bg-white p-3">
+              {chatError ? <p className="mb-2 text-xs text-red-600">{chatError}</p> : null}
+              <div className="flex gap-2">
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') sendChatMessage();
+                  }}
+                  placeholder="Nhập câu hỏi..."
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+                <button
+                  onClick={sendChatMessage}
+                  disabled={isChatLoading}
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                >
+                  Gửi
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <button
+            className="rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-xl transition hover:bg-blue-700"
+            onClick={() => setIsChatOpen(true)}
+          >
+            💬 Chat với trợ lý
+          </button>
+        )}
+      </div>
     </div>
   );
 }
